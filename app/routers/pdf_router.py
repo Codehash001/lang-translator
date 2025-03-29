@@ -381,13 +381,11 @@ def translate_text(text, target_language):
         if not api_key:
             raise ValueError("OpenAI API key is not set")
         
-        # Initialize OpenAI client with minimal configuration
-        client = openai.OpenAI(
-            api_key=api_key
-        )
+        # Set the API key for the older OpenAI client style
+        openai.api_key = api_key
         
-        # Use OpenAI API to translate the text
-        response = client.chat.completions.create(
+        # Use OpenAI API to translate the text (older API style)
+        response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": f"You are a professional translator. Translate the following text to {target_language}. Preserve the formatting and structure as much as possible."},
@@ -398,7 +396,7 @@ def translate_text(text, target_language):
         )
         
         # Extract the translated text from the response
-        translated_text = response.choices[0].message.content
+        translated_text = response.choices[0].message["content"]
         return translated_text
     except Exception as e:
         logger.error(f"Error translating text: {str(e)}")
