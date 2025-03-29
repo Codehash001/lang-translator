@@ -6,6 +6,7 @@ import uvicorn
 import os
 import logging
 from dotenv import load_dotenv, find_dotenv
+import openai
 
 from app.routers import pdf_router
 
@@ -20,18 +21,15 @@ if dotenv_path:
     load_dotenv(dotenv_path)
 else:
     logger.warning("No .env file found. Using environment variables from the system.")
-    load_dotenv()  # Try default loading anyway
 
-# Check for OpenAI API key
+# Configure OpenAI API key
 api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    logger.warning("OpenAI API key is not set. Translation functionality will not work.")
-    logger.warning("Please set a valid OpenAI API key in the .env file.")
-elif api_key == "your_openai_api_key_here":
-    logger.warning("OpenAI API key is still set to the default placeholder value. Translation functionality will not work.")
-    logger.warning("Please replace 'your_openai_api_key_here' with your actual OpenAI API key in the .env file.")
-else:
+if api_key:
+    # For newer OpenAI client (v1.0.0+)
+    # We don't set it globally here, we'll create client instances as needed
     logger.info(f"OpenAI API key is set (starts with {api_key[:4]}...)")
+else:
+    logger.warning("OpenAI API key is not set. Translation functionality will not work.")
 
 app = FastAPI(title="PDF Translator")
 
@@ -64,15 +62,12 @@ async def status():
     api_key_status = "Not set"
     
     if api_key:
-        if api_key == "your_openai_api_key_here":
-            api_key_status = "Using placeholder value (needs to be updated)"
-        else:
-            api_key_status = f"Set (starts with {api_key[:4]}...)"
+        api_key_status = "Set (starts with {}...)".format(api_key[:4])
     
     return {
         "status": "operational",
         "api_key_status": api_key_status,
-        "translation_available": api_key and api_key != "your_openai_api_key_here"
+        "translation_available": api_key
     }
 
 @app.get("/api/env-check")
@@ -96,7 +91,6 @@ async def env_check():
         "dotenv_found": bool(dotenv_path),
         "dotenv_path": dotenv_path if dotenv_path else "Not found",
         "openai_api_key_set": bool(os.getenv("OPENAI_API_KEY")),
-        "openai_api_key_is_placeholder": os.getenv("OPENAI_API_KEY") == "your_openai_api_key_here",
         "env_vars_count": len(env_vars)
     }
 

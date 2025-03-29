@@ -376,9 +376,17 @@ def translate_text(text, target_language):
         if not text or text.strip() == "":
             return "No content to translate."
         
-        # Use OpenAI API to translate the text (using the new client)
-        client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Get API key from environment
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OpenAI API key is not set")
         
+        # Initialize OpenAI client with minimal configuration
+        client = openai.OpenAI(
+            api_key=api_key
+        )
+        
+        # Use OpenAI API to translate the text
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
