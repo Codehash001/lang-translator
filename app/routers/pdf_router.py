@@ -12,7 +12,6 @@ import shutil
 from dotenv import load_dotenv, find_dotenv
 from typing import List, Dict, Any, Optional
 import markdown2
-from fpdf import FPDF
 import openai
 import PyPDF2
 from reportlab.lib.pagesizes import letter
