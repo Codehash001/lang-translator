@@ -15,7 +15,7 @@ import markdown2
 import openai
 import PyPDF2
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.pdfbase import pdfmetrics
@@ -434,10 +434,7 @@ async def translate_pdf(file_id: str, target_language: str):
         export_path = os.path.join("exports", export_filename)
         
         with open(export_path, "w", encoding="utf-8") as export_file:
-            export_file.write(f"# Translated Document\n\n")
-            export_file.write(f"*Original language: Auto-detected*\n")
-            export_file.write(f"*Target language: {target_language}*\n\n")
-            
+            # Write each page directly without headers
             for i, page in enumerate(pdf_text):
                 page_number = i + 1
                 logger.info(f"Translating page {page_number} to {target_language}")
@@ -462,7 +459,7 @@ async def translate_pdf(file_id: str, target_language: str):
                     "content": translated_content
                 })
                 
-                # Write to markdown file
+                # Write to markdown file - just the page content
                 export_file.write(f"## Page {page_number}\n\n")
                 export_file.write(f"{translated_content}\n\n")
                 
@@ -551,7 +548,34 @@ async def download_translated_file(file_id: str, format: str = Query("pdf", enum
                 md_content = md_file.read()
             
             try:
-                # Create a PDF document
+                # Split the content by page markers
+                pages = []
+                current_page = []
+                
+                # Parse the markdown content
+                lines = md_content.split('\n')
+                
+                for line in lines:
+                    # When we find a page marker, start a new page
+                    if line.startswith('## Page '):
+                        if current_page:  # If we have content for the current page
+                            pages.append(current_page)
+                            current_page = []
+                        current_page = [line]  # Start with the page header
+                    else:
+                        current_page.append(line)
+                
+                # Add the last page if it has content
+                if current_page:
+                    pages.append(current_page)
+                
+                # Create a PDF document with one page per translated page
+                from reportlab.lib.pagesizes import letter
+                from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+                from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+                from reportlab.lib.enums import TA_CENTER
+                
+                # Create the PDF document
                 doc = SimpleDocTemplate(
                     pdf_path,
                     pagesize=letter,
@@ -563,55 +587,40 @@ async def download_translated_file(file_id: str, format: str = Query("pdf", enum
                 
                 # Create styles
                 styles = getSampleStyleSheet()
-                title_style = ParagraphStyle(
-                    'Title',
-                    parent=styles['Heading1'],
-                    alignment=TA_CENTER,
-                    fontSize=18
-                )
-                heading1_style = ParagraphStyle(
-                    'Heading1',
+                heading_style = ParagraphStyle(
+                    'Heading',
                     parent=styles['Heading1'],
                     fontSize=16
                 )
-                heading2_style = ParagraphStyle(
-                    'Heading2',
-                    parent=styles['Heading2'],
-                    fontSize=14
-                )
                 normal_style = styles['Normal']
                 
-                # Create the document content
-                content = []
+                # Build content for each page
+                all_content = []
                 
-                # Parse the markdown content
-                lines = md_content.split('\n')
-                
-                for i, line in enumerate(lines):
-                    # Skip empty lines
-                    if not line.strip():
-                        content.append(Spacer(1, 6))
-                        continue
+                for page_content in pages:
+                    page_elements = []
                     
-                    # Handle headings
-                    if line.startswith('# '):
-                        content.append(Paragraph(line[2:], title_style))
-                        content.append(Spacer(1, 12))
-                    elif line.startswith('## '):
-                        content.append(Paragraph(line[3:], heading1_style))
-                        content.append(Spacer(1, 10))
-                    elif line.startswith('### '):
-                        content.append(Paragraph(line[4:], heading2_style))
-                        content.append(Spacer(1, 8))
-                    # Handle emphasis (italic)
-                    elif line.startswith('*') and line.endswith('*') and len(line) > 2:
-                        content.append(Paragraph(f"<i>{line[1:-1]}</i>", normal_style))
-                    # Regular text
-                    else:
-                        content.append(Paragraph(line, normal_style))
+                    for i, line in enumerate(page_content):
+                        # Skip empty lines
+                        if not line.strip():
+                            page_elements.append(Spacer(1, 6))
+                            continue
+                        
+                        # Handle page header
+                        if line.startswith('## Page '):
+                            page_elements.append(Paragraph(line[3:], heading_style))
+                            page_elements.append(Spacer(1, 10))
+                        # Regular text
+                        else:
+                            page_elements.append(Paragraph(line, normal_style))
+                    
+                    # Add a page break after each page except the last one
+                    all_content.extend(page_elements)
+                    if page_content != pages[-1]:
+                        all_content.append(PageBreak())
                 
                 # Build the PDF
-                doc.build(content)
+                doc.build(all_content)
                 
             except Exception as e:
                 logger.error(f"Error generating PDF: {str(e)}")
